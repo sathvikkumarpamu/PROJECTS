@@ -1,1 +1,7 @@
-code
+The project Doppler Shift Compensation in LEO Satellite Communication focuses on addressing one of the major challenges in Low Earth Orbit (LEO) satellite systems—the Doppler frequency shift caused by the high orbital velocity of satellites (approximately 7.5 km/s). This relative motion between the satellite and ground terminal induces frequency offsets in the received signals, degrading synchronization accuracy, increasing bit error rates, and reducing spectral efficiency.
+
+The project implements a terminal-side Doppler compensation strategy using MATLAB simulation, where the Doppler frequency is estimated from orbital parameters and corrected digitally at the receiver side. The simulation models a 2 GHz carrier signal affected by a 50 kHz Doppler shift due to satellite motion. The compensated output demonstrates complete signal recovery with 0% bit error rate, confirming the effectiveness of the approach.
+
+This method emphasizes signal restoration and synchronization improvement without increasing the complexity on the satellite side, as compensation occurs entirely at the ground terminal. The technique is foundational for future satellite communication systems, enabling reliable data transmission, error-free demodulation, and compatibility with 5G/6G non-terrestrial networks (NTNs).
+
+Overall, the project validates that Doppler correction is essential for maintaining robust and efficient communication in LEO systems where time-varying frequency offsets can otherwise disrupt data links.
