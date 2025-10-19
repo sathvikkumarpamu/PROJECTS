@@ -1,1 +1,114 @@
-#matlab code 
+% Channel Equalization in Digital Communication (Zero-Forcing Equalizer)
+
+% Step 1: Generate transmitted signal (random BPSK data)
+num_symbols = 1000 ;  % Number of symbols
+data_bits = randi([0 1], num_symbols, 1);  % Generate random binary data (0s and 1s)
+tx_signal = 2*data_bits - 1;  % BPSK modulation (0 -> -1, 1 -> 1)
+ 
+%% Step 2: Create Message Signal and Carrier Signal
+fs = 100;  % Sampling frequency
+t = (0:num_symbols-1)/fs; % Time vector
+f_c = 5;  % Carrier frequency
+ 
+% Create message signal (BPSK modulated)
+message_signal = tx_signal;
+ 
+% Create carrier signal
+carrier_signal = cos(2 * pi * f_c * t)';
+ 
+% Modulate the message signal onto the carrier
+modulated_signal = message_signal .* carrier_signal;
+ 
+%% Step 3: Simulate the Channel (Add ISI)
+channel = [0.8, 0.2, 0.1];  % Channel impulse response (includes ISI)
+tx_signal_channel = conv(modulated_signal, channel, 'same');
+ 
+%% Step 4: Add Noise (AWGN)
+SNR = 10;  % Signal-to-noise ratio in dB
+rx_signal = awgn(tx_signal_channel, SNR, 'measured');
+ 
+%% Step 5: Compute ISI Ratio
+% ISI = Convolved signal - Direct signal contribution
+direct_signal = modulated_signal * channel(1);  % Direct path contribution
+isi_component = tx_signal_channel - direct_signal;
+ 
+% Compute ISI power and total signal power
+isi_power = mean(abs(isi_component).^2);
+total_power = mean(abs(tx_signal_channel).^2);
+ 
+isi_ratio = isi_power / total_power;
+ 
+%% Step 6: Channel Equalization (Zero-Forcing Equalizer)
+equalizer_taps = length(channel);
+rx_signal_padded = [zeros(equalizer_taps-1, 1); rx_signal];  % Zero-padding
+ 
+% Create the ZF equalizer using the channel response
+equalized_signal = zeros(size(rx_signal));
+for n = equalizer_taps:num_symbols
+    rx_segment = rx_signal_padded(n-equalizer_taps+1:n);
+    rx_segment = rx_segment(:);
+    channel_vector = channel(:);
+    if length(rx_segment) == length(channel_vector)
+        % Zero-forcing: Remove ISI by subtracting the contribution of past symbols
+        equalized_signal(n) = rx_signal_padded(n) - sum(channel_vector .* rx_segment);
+    else
+        error('Dimension mismatch between channel and received signal segment');
+    end
+end
+ 
+%% Step 7: Demodulate Signals
+% Coherent demodulation using the carrier signal
+received_signal = rx_signal .* carrier_signal;
+equalized_signal = equalized_signal .* carrier_signal;
+ 
+% Decision rule for BPSK
+equalized_data_bits = equalized_signal > 0;
+demodulated_data_bits = received_signal > 0;
+ 
+%% Step 8: Compute the Bit Error Rate (BER)
+ber_equalized = sum(data_bits ~= equalized_data_bits) / num_symbols;
+ber_no_equalization = sum(data_bits ~= demodulated_data_bits) / num_symbols;
+ 
+%% Step 9: Display Results
+disp(['ISI Ratio: ', num2str(isi_ratio)]);
+disp(['Bit Error Rate (with Equalization): ', num2str(ber_equalized)]);
+disp(['Bit Error Rate (without Equalization): ', num2str(ber_no_equalization)]);
+ 
+%% Step 10: Plot Signals
+figure;
+ 
+% Plot message signal
+subplot(5, 1, 1);
+plot(t, message_signal);
+title('Message Signal (BPSK)');
+xlabel('Time (s)');
+ylabel('Amplitude');
+ 
+% Plot carrier signal
+subplot(5, 1, 2);
+plot(t, carrier_signal);
+title('Carrier Signal');
+xlabel('Time (s)');
+ylabel('Amplitude');
+ 
+% Plot transmitted signal with ISI
+subplot(5, 1, 3);
+plot(tx_signal_channel);
+title('Transmitted Signal with ISI');
+xlabel('Symbol Index');
+ylabel('Amplitude');
+ 
+% Plot received signal with ISI and noise (NEW)
+subplot(5, 1, 4);
+plot(rx_signal);
+title('Received Signal with ISI and Noise');
+xlabel('Symbol Index');
+ylabel('Amplitude');
+ 
+% Plot equalized signal
+subplot(5, 1, 5);
+plot(equalized_signal);
+title('Equalized Signal (Zero-Forcing)');
+xlabel('Symbol Index');
+ylabel('Amplitude');
+% end of the code
