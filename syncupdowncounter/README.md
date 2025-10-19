@@ -48,10 +48,6 @@ The 3-bit synchronous up/down counter was successfully designed and verified. Th
 - The counter design can be extended for more bits by cascading additional JK flip-flops.
 - The synchronous nature ensures minimal propagation delay as all flip-flops are triggered by the same clock pulse.
 
-## Author
-Project based on **Digital Electronics Laboratory Experiment** — Synchronous Counter Design using **IC 7473**.
-
----
 
 ### Example Output States (for M=1, Up Counting)
 | Decimal | Binary Output (Q3 Q2 Q1) |
