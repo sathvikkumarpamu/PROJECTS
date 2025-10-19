@@ -1,0 +1,25 @@
+% RC Circuit Parameters  
+R = 1e3; % Resistance in ohms (1k ohm)  
+C = 1e-6; % Capacitance in farads (1 uF) 
+ Vin = 5; % Input Voltage in volts  
+% Time Constants 
+ tau = R * C ;   % Time constant (tau)  
+% Time Vector 
+ t = linspace(0, 5*tau, 1000);  % Time from 0 to 5 tau  
+% Output Voltage across Capacitor  
+(Vout) Vout = Vin * (1 - exp(-t/tau)); % Charging equation  
+% Calculate Tilt Percentage  
+Tilt = (Vout / Vin) * 100;  
+% Plotting the Results  
+figure;  
+subplot(2,1,1); 
+ plot(t, Vout); 
+ xlabel('Time (s)'); 
+ ylabel('V_{out} (V)');  
+title('Output Voltage across Capacitor');  
+subplot(2,1,2); 
+ plot(t, Tilt); 
+ xlabel('Time (s)'); 
+ ylabel('Tilt Percentage (%)');  
+title('Percentage of Tilt in RC Circuit');  
+grid on; 
