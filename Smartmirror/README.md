@@ -1,6 +1,6 @@
 # 🪞 Smart Mirror – IoT-Enabled Weather Display System 🌤️  
 **Project Title:** Smart Mirror that Shows Real-Time Weather Information  
-**Technology:** IoT | Embedded Systems | Arduino | Cloud API Integration  
+**Technology:** IoT | Embedded Systems | ESP-32 | Cloud API Integration  
 
 ---
 
