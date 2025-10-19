@@ -9,7 +9,6 @@
 The **Smart Mirror** is a futuristic IoT-based innovation that combines a **reflective mirror surface** with an **embedded digital display**.  
 It seamlessly presents **real-time weather updates**, allowing users to stay informed while going about their daily routines.  
 
-Designed for **HackAduino 2K25**, this project demonstrates how **smart devices** can enhance modern living through **embedded intelligence** and **cloud integration**.
 
 ---
 
