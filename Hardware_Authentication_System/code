@@ -1,0 +1,55 @@
+module authentication_system (
+    input clk,
+    input rst_n,             // Active LOW reset
+    input enter,             // Enter button
+    input [3:0] key_in,      // 4-bit digit input (0–9)
+    output reg unlock,       // Unlock signal
+    output reg alarm         // Alarm activation signal
+);
+
+    // Correct Password (4-digit)
+    parameter [15:0] CORRECT_PWD = 16'h1234;
+
+    reg [15:0] entered_pwd;  // Stores the 4-digit entered password
+    reg [2:0] digit_count;   // Tracks digits entered (0–4)
+    reg [1:0] wrong_attempts; // Counts wrong attempts (0–3)
+
+    always @(posedge clk or negedge rst_n) begin
+        // RESET PHASE
+        if (!rst_n) begin
+            entered_pwd <= 16'd0;
+            digit_count <= 0;
+            wrong_attempts <= 0;
+            unlock <= 0;
+            alarm <= 0;
+        end 
+        else begin
+            // PASSWORD ENTRY PHASE
+            if (!enter) begin
+                if (digit_count < 4) begin
+                    entered_pwd <= {entered_pwd[11:0], key_in};  
+                    digit_count <= digit_count + 1;
+                end
+            end 
+            else begin
+                // VERIFICATION PHASE
+                if (digit_count == 4) begin
+                    if (entered_pwd == CORRECT_PWD) begin
+                        unlock <= 1;
+                        wrong_attempts <= 0;   // Reset attempt counter
+                    end else begin
+                        unlock <= 0;
+                        wrong_attempts <= wrong_attempts + 1;
+
+                        if (wrong_attempts == 2)
+                            alarm <= 1;       // Alarm on 3rd wrong attempt
+                    end
+                end
+
+                // Prepare for next entry
+                digit_count <= 0;
+                entered_pwd <= 0;
+            end
+        end
+    end
+endmodule
