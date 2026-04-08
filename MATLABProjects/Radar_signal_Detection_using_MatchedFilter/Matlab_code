@@ -1,0 +1,47 @@
+%% 1. Basic Setup
+fs = 1e6;                   % Sampling Frequency (1 MHz)
+T = 100e-6;                 % Pulse Duration (100 microseconds)
+B = 2e5;                    % Bandwidth (200 kHz)
+c = 3e8;                    % Speed of light (m/s)
+
+% Generate the Radar Pulse (LFM Chirp)
+t_pulse = 0:1/fs:T-1/fs;
+s = chirp(t_pulse, 0, T, B);
+
+%% 2. Create the Hidden Target
+target_range = 45000;                % Target is 45km away
+delay = (2 * target_range) / c;      % Time for signal to go and come back
+delay_samples = round(delay * fs);   
+
+% Create a 1ms timeline and hide the pulse in it
+t_total = 0:1/fs:1e-3;
+rx_signal = zeros(size(t_total));
+rx_signal(delay_samples : delay_samples + length(s) - 1) = s;
+
+% Add random noise
+noisy_rx = rx_signal + 1.2 * randn(size(t_total));
+
+%% 3. Apply Matched Filter (The Detection Part)
+% Flip the pulse to create the filter
+h = fliplr(s); 
+
+% Correlate the noisy signal with our pulse template
+% IMPORTANT: If you get an error here, rename your "conv.m" file!
+mf_output = conv(noisy_rx, h, 'same');
+mf_magnitude = abs(mf_output);
+
+%% 4. Plot Results
+figure;
+
+% Plot the noisy signal (The pulse is invisible here)
+subplot(2,1,1);
+plot(t_total*1e3, noisy_rx);
+title('Step 1: Noisy Received Signal (Target is hidden)');
+xlabel('Time (ms)'); ylabel('Amplitude');
+
+% Plot the filtered signal (The pulse becomes a clear peak)
+subplot(2,1,2);
+range_axis = (t_total * c) / 2000; % Convert time to Range in km
+plot(range_axis, mf_magnitude, 'LineWidth', 1.5);
+title('Step 2: After Matched Filter (Target Detected at 45km)');
+xlabel('Range (km)'); ylabel('Magnitude'); grid on;
