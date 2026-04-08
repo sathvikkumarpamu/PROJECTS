@@ -1,0 +1,329 @@
+module riscv_mac_processor (
+    input  wire        clk,
+    input  wire        reset,
+    output wire [31:0] pc_out          // For debugging
+);
+
+    // ========== Wire Declarations ==========
+
+    // IF Stage
+    wire [31:0] pc, pc_next, pc_plus_4;
+    wire [31:0] if_instruction;
+    wire [31:0] id_pc, id_instruction;
+
+    // ID Stage
+    wire [6:0]  opcode;
+    wire [4:0]  rs1, rs2, rd;
+    wire [2:0]  funct3;
+    wire [6:0]  funct7;
+    wire [31:0] immediate;
+    wire [31:0] id_rs1_data, id_rs2_data, id_rd_data;
+    wire        id_reg_write, id_mem_to_reg, id_mem_read, id_mem_write;
+    wire        id_alu_src, id_branch, id_jump, id_mul_enable, id_mac_enable;
+    wire [3:0]  id_alu_op;
+
+    // EX Stage
+    wire [31:0] ex_pc, ex_rs1_data, ex_rs2_data, ex_rd_data, ex_immediate;
+    wire [4:0]  ex_rs1, ex_rs2, ex_rd;
+    wire [2:0]  ex_funct3;
+    wire        ex_reg_write, ex_mem_to_reg, ex_mem_read, ex_mem_write;
+    wire        ex_alu_src, ex_mul_enable, ex_mac_enable;
+    wire [3:0]  ex_alu_op;
+    wire [31:0] ex_alu_operand_a, ex_alu_operand_b;
+    wire [31:0] ex_alu_result;
+    wire [63:0] ex_mul_product;          // Used only by MUL instruction now
+    wire [31:0] ex_mac_result;           // From new mac_unit accum_out
+    wire        mac_overflow_flag;       // MAC overflow status (route to CSR if needed)
+    wire [31:0] ex_result;               // Final EX stage result
+    wire [1:0]  forward_a, forward_b, forward_rd;
+    wire [31:0] forwarded_rs1, forwarded_rs2, forwarded_rd;
+
+    // MEM Stage
+    wire [31:0] mem_alu_result, mem_rs2_data;
+    wire [4:0]  mem_rd;
+    wire [2:0]  mem_funct3;
+    wire        mem_reg_write, mem_mem_to_reg, mem_mem_read, mem_mem_write;
+    wire [31:0] mem_read_data;
+
+    // WB Stage
+    wire [31:0] wb_alu_result, wb_read_data;
+    wire [4:0]  wb_rd;
+    wire        wb_reg_write, wb_mem_to_reg;
+    wire [31:0] wb_write_data;
+
+    // Hazard Detection
+    wire        stall, flush;
+
+    // ========== Assign Output ==========
+    assign pc_out = pc;
+
+    // ========== IF Stage ==========
+
+    assign pc_plus_4 = pc + 32'h00000004;
+    assign pc_next   = pc_plus_4;
+
+    program_counter PC (
+        .clk    (clk),
+        .reset  (reset),
+        .stall  (stall),
+        .pc_next(pc_next),
+        .pc     (pc)
+    );
+
+    instruction_memory IMEM (
+        .address    (pc),
+        .instruction(if_instruction)
+    );
+
+    if_id_register IF_ID (
+        .clk           (clk),
+        .reset         (reset),
+        .stall         (stall),
+        .flush         (flush),
+        .if_pc         (pc),
+        .if_instruction(if_instruction),
+        .id_pc         (id_pc),
+        .id_instruction(id_instruction)
+    );
+
+    // ========== ID Stage ==========
+
+    instruction_decoder DECODER (
+        .instruction(id_instruction),
+        .opcode     (opcode),
+        .rd         (rd),
+        .funct3     (funct3),
+        .rs1        (rs1),
+        .rs2        (rs2),
+        .funct7     (funct7),
+        .imm_i      (),
+        .imm_s      (),
+        .imm_b      (),
+        .imm_u      (),
+        .imm_j      ()
+    );
+
+    control_unit CONTROL (
+        .opcode    (opcode),
+        .funct3    (funct3),
+        .funct7    (funct7),
+        .reg_write (id_reg_write),
+        .mem_to_reg(id_mem_to_reg),
+        .mem_read  (id_mem_read),
+        .mem_write (id_mem_write),
+        .alu_src   (id_alu_src),
+        .alu_op    (id_alu_op),
+        .branch    (id_branch),
+        .jump      (id_jump),
+        .mul_enable(id_mul_enable),
+        .div_enable(),
+        .mac_enable(id_mac_enable)
+    );
+
+    immediate_generator IMMGEN (
+        .instruction(id_instruction),
+        .opcode     (opcode),
+        .immediate  (immediate)
+    );
+
+    register_file REGFILE (
+        .clk        (clk),
+        .reset      (reset),
+        .reg_write  (wb_reg_write),
+        .read_reg1  (rs1),
+        .read_reg2  (rs2),
+        .read_reg3  (rd),             // 3rd read port (kept for compatibility)
+        .write_reg  (wb_rd),
+        .write_data (wb_write_data),
+        .read_data1 (id_rs1_data),
+        .read_data2 (id_rs2_data),
+        .read_data3 (id_rd_data)      // Not used by new MAC (internal accumulator)
+    );
+
+    hazard_detection_unit HAZARD (
+        .id_rs1      (rs1),
+        .id_rs2      (rs2),
+        .id_rd       (rd),
+        .id_mac_enable(id_mac_enable),
+        .ex_rd       (ex_rd),
+        .ex_mem_read (ex_mem_read),
+        .stall       (stall),
+        .flush       (flush)
+    );
+
+    id_ex_register ID_EX (
+        .clk          (clk),
+        .reset        (reset),
+        .id_pc        (id_pc),
+        .id_rs1_data  (id_rs1_data),
+        .id_rs2_data  (id_rs2_data),
+        .id_rd_data   (id_rd_data),
+        .id_immediate (immediate),
+        .id_rs1       (rs1),
+        .id_rs2       (rs2),
+        .id_rd        (rd),
+        .id_funct3    (funct3),
+        .id_reg_write (id_reg_write),
+        .id_mem_to_reg(id_mem_to_reg),
+        .id_mem_read  (id_mem_read),
+        .id_mem_write (id_mem_write),
+        .id_alu_src   (id_alu_src),
+        .id_alu_op    (id_alu_op),
+        .id_mul_enable(id_mul_enable),
+        .id_mac_enable(id_mac_enable),
+        .ex_pc        (ex_pc),
+        .ex_rs1_data  (ex_rs1_data),
+        .ex_rs2_data  (ex_rs2_data),
+        .ex_rd_data   (ex_rd_data),
+        .ex_immediate (ex_immediate),
+        .ex_rs1       (ex_rs1),
+        .ex_rs2       (ex_rs2),
+        .ex_rd        (ex_rd),
+        .ex_funct3    (ex_funct3),
+        .ex_reg_write (ex_reg_write),
+        .ex_mem_to_reg(ex_mem_to_reg),
+        .ex_mem_read  (ex_mem_read),
+        .ex_mem_write (ex_mem_write),
+        .ex_alu_src   (ex_alu_src),
+        .ex_alu_op    (ex_alu_op),
+        .ex_mul_enable(ex_mul_enable),
+        .ex_mac_enable(ex_mac_enable)
+    );
+
+    // ========== EX Stage ==========
+
+    forwarding_unit FORWARD (
+        .ex_rs1      (ex_rs1),
+        .ex_rs2      (ex_rs2),
+        .ex_rd       (ex_rd),
+        .mem_rd      (mem_rd),
+        .mem_reg_write(mem_reg_write),
+        .wb_rd       (wb_rd),
+        .wb_reg_write(wb_reg_write),
+        .mac_enable  (ex_mac_enable),
+        .forward_a   (forward_a),
+        .forward_b   (forward_b),
+        .forward_rd  (forward_rd)
+    );
+
+    // Forwarding MUXes
+    assign forwarded_rs1 = (forward_a == 2'b10) ? mem_alu_result :
+                           (forward_a == 2'b01) ? wb_write_data  :
+                           ex_rs1_data;
+
+    assign forwarded_rs2 = (forward_b == 2'b10) ? mem_alu_result :
+                           (forward_b == 2'b01) ? wb_write_data  :
+                           ex_rs2_data;
+
+    // forwarded_rd kept for port compatibility; not used by new MAC
+    assign forwarded_rd  = (forward_rd == 2'b10) ? mem_alu_result :
+                           (forward_rd == 2'b01) ? wb_write_data  :
+                           ex_rd_data;
+
+    // ALU operands
+    assign ex_alu_operand_a = forwarded_rs1;
+    assign ex_alu_operand_b = ex_alu_src ? ex_immediate : forwarded_rs2;
+
+    alu ALU (
+        .operand_a (ex_alu_operand_a),
+        .operand_b (ex_alu_operand_b),
+        .alu_op    (ex_alu_op),
+        .alu_result(ex_alu_result),
+        .zero      ()
+    );
+
+    // Shared multiplier - used by MUL instruction only.
+    // MAC is now decoupled: it has its own internal Booth multiplier.
+    multiplier MULTIPLIER (
+        .clk          (clk),
+        .mul_enable   (ex_mul_enable),        // ? Removed ex_mac_enable (MAC is independent)
+        .multiplicand (forwarded_rs1),
+        .multiplier_in(forwarded_rs2),
+        .funct3       (ex_funct3),
+        .product      (ex_mul_product),
+        .mul_ready    ()
+    );
+
+    // ?? New MAC Unit ?????????????????????????????????????????????????????????
+    // Inputs  : lower 16 bits of Rs1 and Rs2 (signed)
+    // Latency : 2 cycles (Booth multiply + saturating accumulate)
+    // Reset   : active-low rst_n maps to ~reset (processor uses active-high)
+    // clr_acc : tied to processor reset to flush accumulator on reset
+    // Note    : accum_out is the persistent MAC accumulator, NOT sourced from
+    //           the register file's Rd (unlike the old MAC unit).
+    //           To read the MAC result into a register, a MAC instruction must
+    //           fire and the writeback will capture accum_out at that time.
+    mac_unit MAC (
+        .clk        (clk),
+        .rst_n      (~reset),                  // Active-low reset
+        .en         (ex_mac_enable),
+        .clr_acc    (reset),                   // Clear accumulator on reset
+        .A          (forwarded_rs1[15:0]),     // Lower 16 bits of Rs1 (signed)
+        .B          (forwarded_rs2[15:0]),     // Lower 16 bits of Rs2 (signed)
+        .accum_out  (ex_mac_result),
+        .mac_overflow(mac_overflow_flag)        // Route to CSR / status reg if needed
+    );
+
+    // EX Result MUX: MAC > MUL > ALU
+    assign ex_result = ex_mac_enable  ? ex_mac_result        :
+                       ex_mul_enable  ? ex_mul_product[31:0] :
+                       ex_alu_result;
+
+    // ========== EX/MEM Pipeline Register ==========
+
+    ex_mem_register EX_MEM (
+        .clk          (clk),
+        .reset        (reset),
+        .ex_alu_result(ex_result),
+        .ex_rs2_data  (forwarded_rs2),
+        .ex_rd        (ex_rd),
+        .ex_funct3    (ex_funct3),
+        .ex_reg_write (ex_reg_write),
+        .ex_mem_to_reg(ex_mem_to_reg),
+        .ex_mem_read  (ex_mem_read),
+        .ex_mem_write (ex_mem_write),
+        .mem_alu_result(mem_alu_result),
+        .mem_rs2_data (mem_rs2_data),
+        .mem_rd       (mem_rd),
+        .mem_funct3   (mem_funct3),
+        .mem_reg_write(mem_reg_write),
+        .mem_mem_to_reg(mem_mem_to_reg),
+        .mem_mem_read (mem_mem_read),
+        .mem_mem_write(mem_mem_write)
+    );
+
+    // ========== MEM Stage ==========
+
+    data_memory DMEM (
+        .clk       (clk),
+        .mem_read  (mem_mem_read),
+        .mem_write (mem_mem_write),
+        .funct3    (mem_funct3),
+        .address   (mem_alu_result),
+        .write_data(mem_rs2_data),
+        .read_data (mem_read_data)
+    );
+
+    // ========== MEM/WB Pipeline Register ==========
+
+    mem_wb_register MEM_WB (
+        .clk           (clk),
+        .reset         (reset),
+        .mem_alu_result(mem_alu_result),
+        .mem_read_data (mem_read_data),
+        .mem_rd        (mem_rd),
+        .mem_reg_write (mem_reg_write),
+        .mem_mem_to_reg(mem_mem_to_reg),
+        .wb_alu_result (wb_alu_result),
+        .wb_read_data  (wb_read_data),
+        .wb_rd         (wb_rd),
+        .wb_reg_write  (wb_reg_write),
+        .wb_mem_to_reg (wb_mem_to_reg)
+    );
+
+    // ========== WB Stage ==========
+
+    assign wb_write_data = wb_mem_to_reg ? wb_read_data : wb_alu_result;
+
+endmodule
+
