@@ -1,0 +1,52 @@
+% Doppler Shift Compensation in LEO Satellite Communication
+clc;
+clear;
+
+% Constants
+c = 3e8;                        % Speed of light (m/s)
+fc = 2e9;                       % Carrier frequency (2 GHz)
+v = 7500;                       % Satellite relative velocity (m/s)
+
+% Doppler shift calculation
+fd = (v / c) * fc;             
+fprintf('Doppler Shift: %.2f Hz\n', fd);
+
+% Simulation Parameters
+Fs = 10e6;                      % Sampling frequency (10 MHz)
+t = 0:1/Fs:1e-4;                % Time vector (0.1 ms duration)
+
+% Transmitted baseband signal
+data = cos(2 * pi * 1e5 * t);   % 100 kHz baseband signal
+
+% Transmitted carrier signal (complex representation)
+tx = data .* exp(1j*2*pi*fc*t);
+
+% Received signal with Doppler shift
+rx = data .* exp(1j*2*pi*(fc+fd)*t);
+
+% ----- Doppler Compensation -----
+% Compensate Doppler by multiplying with exp(-j*2*pi*fd*t)
+compensated = rx .* exp(-1j*2*pi*fd*t);
+
+% Take real part (physical signal)
+compensated_real = real(compensated);
+
+% ----- Plotting -----
+subplot(3,1,1);
+plot(t(1:500), real(tx(1:500)));
+title('Original Transmitted Signal');
+xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(3,1,2);
+plot(t(1:500), real(rx(1:500)));
+title('Received Signal with Doppler Shift');
+xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(3,1,3);
+plot(t(1:500), compensated_real(1:500));
+title('Recovered Signal After Doppler Compensation');
+xlabel('Time (s)'); ylabel('Amplitude');
+
+% ----- Verification -----
+error = max(abs(real(tx) - compensated_real));
+fprintf('Maximum error between transmitted and recovered = %.2e\n', error);
