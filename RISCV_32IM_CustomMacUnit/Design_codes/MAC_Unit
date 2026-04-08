@@ -1,0 +1,68 @@
+module mac_unit (
+    input  wire        clk,
+    input  wire        rst_n,       // Active-low asynchronous reset
+    input  wire        en,          // Enable MAC operation
+    input  wire        clr_acc,     // Synchronous clear of accumulator
+    input  wire [15:0] A,           // Operand A (16-bit signed)
+    input  wire [15:0] B,           // Operand B (16-bit signed)
+    output wire [31:0] accum_out,   // Saturated accumulator output
+    output wire        mac_overflow // Overflow flag (sticky)
+);
+
+// ?? Stage 1: Booth Multiplier ?????????????????????????????????????????????
+// Radix-4 Booth encoding + 3-level Dadda CSA tree.
+// Output is registered - 1-cycle latency.
+wire [31:0] product;
+
+booth_multiplier mult (
+    .clk    (clk),
+    .en     (en),
+    .rst_n  (rst_n),
+    .A      (A),
+    .B      (B),
+    .product(product)
+);
+
+// ?? Enable pipeline register ??????????????????????????????????????????????
+// en is high for exactly 1 cycle (when MAC is in EX stage).
+// booth_multiplier registers the product on that cycle.
+// accumulator_adder must fire one cycle LATER (when product is valid),
+// so we delay en by 1 cycle to create en_d1.
+// clr_acc is delayed by the same amount to stay aligned.
+reg en_d1;
+reg clr_d1;
+
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        en_d1  <= 1'b0;
+        clr_d1 <= 1'b0;
+    end else begin
+        en_d1  <= en;
+        clr_d1 <= clr_acc;
+    end
+end
+
+// ?? Stage 2: Saturating Accumulator Adder ????????????????????????????????
+// Adds product to internal accumulator with signed saturation.
+// Enabled by en_d1 (1 cycle after booth_multiplier fires) so it reads
+// the freshly registered product, not a stale or zero value.
+// Saturation: +overflow ? 0x7FFFFFFF, -overflow ? 0x80000000
+
+wire [31:0] sum_out_w;
+wire        overflow_w;
+
+accumulator_adder adder (
+    .clk         (clk),
+    .rst_n       (rst_n),
+    .en          (en_d1),     // ? delayed by 1 cycle: fires when product is valid
+    .clr         (clr_d1),    // ? delayed by 1 cycle: aligned with en_d1
+    .product_in  (product),
+    .sum_out     (sum_out_w),
+    .mac_overflow(overflow_w)
+);
+
+assign accum_out    = sum_out_w;
+assign mac_overflow = overflow_w;
+
+endmodule
+
